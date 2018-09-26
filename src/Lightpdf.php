@@ -87,6 +87,13 @@ class Lightpdf
         } catch (RequestException $e) {
             $this->err_code = 401;
             $this->err_message = "请求时错误";
+
+            var_dump("Err", $e->getMessage());
+            exit;
+            if ($e->hasResponse()) {
+                echo $e->getResponse();
+            }
+
             return false;
         }
 
