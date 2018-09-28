@@ -34,9 +34,22 @@ class LightpdfOcr
      */
     private $filename;
     
+    /**
+     * @var string 识别的语言
+     */
+    private $language = 'English';
+
+    /**
+     * @var string 授权token
+     */
+    public static $api_token;
+
     private function __construct()
     {
         $this->lightpdf = new Lightpdf();
+        $this->lightpdf->setStatus([
+            'api_token' => static::$api_token
+        ]);
     }
     
     /**
@@ -54,13 +67,15 @@ class LightpdfOcr
      * 创建任务
      *
      * @param string $filename
+     * @param string $language
      * @return bool
      * @throws \GuzzleHttp\Exception\GuzzleException
      */
-    private function create(string $filename):  bool
+    private function create(string $filename, string $language = 'English'):  bool
     {
         //  保存文件名
         $this->filename = $filename;
+        $this->language = $language;
         
         // 创建任务
         if (!$this->lightpdf->createTask($this->taskType)) {
@@ -75,7 +90,7 @@ class LightpdfOcr
         }
         
         // 开始识别
-        if(!$this->lightpdf->modifyTask()) {
+        if(!$this->lightpdf->modifyTask($this->language)) {
             return false;
         }
         
@@ -90,25 +105,27 @@ class LightpdfOcr
      * 传入图片文件进行识别(同步等待返回)
      *
      * @param string $filename 要识别图片的储存文件名
-     * @return string
+     * @param string $language 待识别的语言
+     * @return array
      */
-    public static function inFile(string $filename): string
+    public static function inFile(string $filename, string $language = 'English'): array
     {
         /**
          * 实例化自己创建任务
          */
         $ocr = new static();
-        if(!$ocr->create($filename)) {
-            return '';
+        if(!$ocr->create($filename, $language)) {
+            return $ocr->getError();
         }
-        
+
         // 任务等待
         $body = '';
         if ($info = $ocr->lightpdf->infoTask()) {
             $body = $ocr->lightpdf->getTaskBody($info);
+            return ['code' => 0, 'body' => $body];
+        } else {
+            return $ocr->getError();
         }
-        
-        return $body;
     }
     
     /**
