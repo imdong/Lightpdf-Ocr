@@ -384,7 +384,6 @@ class Lightpdf
                 'output-format' => 'txt'
             ]
         ];
-        
         $result = $this->sendPost($uri, $data, 'PUT');
         
         return !is_null($result);
