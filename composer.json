@@ -2,7 +2,7 @@
   "name": "imdong/lightpdf-ocr",
   "description": "OCR recognition based on lightpdf.com",
   "type": "library",
-  "license": "Apache",
+  "license": "Apache-2.0",
   "homepage": "http://www.qs5.org/",
   "authors": [
     {
@@ -12,7 +12,7 @@
       "role": "Developer"
     }
   ],
-  "minimum-stability": "dev",
+  "minimum-stability": "stable",
   "require": {
     "php": ">=7.0",
     "ext-json": "*",
