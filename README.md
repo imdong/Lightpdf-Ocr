@@ -8,7 +8,7 @@
 请手动至 [https://lightpdf.com/zh/ocr](https://lightpdf.com/zh/ocr) 识别。
 
 ## 运行环境
-- PHP 5.3+
+- PHP 7.0+
 - cURL extension
 - JSON extension
 
