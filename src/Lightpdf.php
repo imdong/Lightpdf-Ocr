@@ -6,7 +6,7 @@ use GuzzleHttp;
 use GuzzleHttp\Client as HttpClient;
 use GuzzleHttp\Exception\RequestException;
 use OSS\OssClient;
-use \OSS\Core\OssException;
+use OSS\Core\OssException;
 
 
 /**
@@ -21,7 +21,7 @@ class Lightpdf
      * @var string
      */
     private $api_base_url = 'https://api.lightpdf.com/api';
-
+    
     /**
      * Http请求对象
      *
@@ -58,22 +58,32 @@ class Lightpdf
     private $task_id;
     
     /**
-     * 工作 id
+     * 文件 ID
      *
      * @var string
      */
     private $file_id;
     
+    /**
+     * 识别结果文件
+     *
+     * @var string
+     */
+    private $target_file_url;
     
     /**
      * 构造函数
+     * @param array $options
      */
-    public function __construct()
+    public function __construct(array $options = [])
     {
         // 创建Http对象
         $this->httpClient = new HttpClient([
             'base_uri' => $this->api_base_url
         ]);
+        
+        // 恢复现场
+        // $this->setStatus($options);
     }
     
     /**
@@ -83,6 +93,34 @@ class Lightpdf
     public function getError(): array
     {
         return ['code' => $this->err_code, 'message' => $this->err_message];
+    }
+    
+    /**
+     * 获取当前状态，用于重新创建命令
+     *
+     * @return array
+     */
+    public function getStatus(): array
+    {
+        return [
+            'api_token' => $this->api_token,
+            'task_id'   => $this->task_id,
+            'file_id'   => $this->file_id
+        ];
+    }
+    
+    /**
+     * 重设当前状态，用于重新创建命令
+     *
+     * @param array $options
+     * @return void
+     */
+    public function setStatus(array $options = [])
+    {
+        // 保存配置
+        foreach ($options as $key => $value) {
+            $this->{$key} = $value;
+        }
     }
     
     /**
@@ -150,7 +188,7 @@ class Lightpdf
      * @return array
      * @throws GuzzleHttp\Exception\GuzzleException
      */
-    public function sendPost(string $uri, array $data, string $method = 'POST'): array
+    public function sendPost(string $uri, array $data = null, string $method = 'POST'): array
     {
         // 创建请求正文
         $url = $this->getAPIURL($uri);
@@ -162,14 +200,16 @@ class Lightpdf
         
         // 附加头信息
         $options = [
-            'body'    => json_encode($data),
             'headers' => [
                 'referer'       => 'https://lightpdf.com/zh/ocr',
                 'content-type'  => 'application/json',
                 'authorization' => 'Bearer ' . $this->api_token
             ]
-            // 'auth' => ['Bearer', $this->api_token]
         ];
+        
+        if ($data) {
+            $options['body'] = json_encode($data);
+        }
         
         // 发起请求
         try {
@@ -242,9 +282,9 @@ class Lightpdf
             $this->err_message = '文件不存在';
             return [];
         }
-        $content = file_get_contents($file);
+        $content  = file_get_contents($file);
         $filename = basename($file);
-        $object = $info['objects'][$filename];
+        $object   = $info['objects'][$filename];
         
         
         // 上传文件
@@ -258,18 +298,18 @@ class Lightpdf
         
         // 构建回调信息
         $replace_arr = [
-            'bucket' => $info['bucket'],
-            'object' => $object,
-            'etag'   => $result['etag'],
-            'size'   => $result['info']['size_upload'],
-            'mimeType' => $result['oss-requestheaders']['Content-Type'],
+            'bucket'           => $info['bucket'],
+            'object'           => $object,
+            'etag'             => $result['etag'],
+            'size'             => $result['info']['size_upload'],
+            'mimeType'         => $result['oss-requestheaders']['Content-Type'],
             'imageInfo.height' => '100',
-            'imageInfo.width' => '100',
+            'imageInfo.width'  => '100',
             'imageInfo.format' => 'png'
         ];
         $replaceData = ['search' => [], 'replace' => []];
         foreach ($replace_arr as $_key => $value) {
-            $replaceData['search'][] = sprintf('${%s}', $_key);
+            $replaceData['search'][]  = sprintf('${%s}', $_key);
             $replaceData['replace'][] = $value;
         }
         $callbackBody = str_ireplace($replaceData['search'], $replaceData['replace'], $info['callback_url']['callbackBody']);
@@ -278,7 +318,7 @@ class Lightpdf
         $options = [
             'body'    => $callbackBody,
             'headers' => [
-                'content-type'  => $info['callback_url']['callbackBodyType']
+                'content-type' => $info['callback_url']['callbackBodyType']
             ]
         ];
         
@@ -309,12 +349,12 @@ class Lightpdf
     public function getFileAuthorization(string $file): array
     {
         $filename = basename($file);
-        $data = [
+        $data     = [
             'files' => [$filename]
         ];
         
         if ($result = $this->sendPost('/authentications', $data)) {
-            if ($result = $this->uploadToOss($result, $file)){
+            if ($result = $this->uploadToOss($result, $file)) {
                 $this->file_id = $result['id'];
                 return $result;
             }
@@ -324,23 +364,23 @@ class Lightpdf
     }
     
     /**
-     * 开始任务
+     * 修改任务
      * @param string $language
      * @return bool
      * @throws GuzzleHttp\Exception\GuzzleException
      */
-    public function startTask(string $language = 'English'): bool
+    public function modifyTask(string $language = 'English'): bool
     {
-        $uri = '/tasks/' . $this->task_id;
+        $uri  = '/tasks/' . $this->task_id;
         $data = [
             'files' => [
                 [
-                    'file_id' => $this->file_id,
+                    'file_id'  => $this->file_id,
                     'password' => ''
                 ]
             ],
-            'args' => [
-                'language' => $language,
+            'args'  => [
+                'language'      => $language,
                 'output-format' => 'txt'
             ]
         ];
@@ -348,10 +388,99 @@ class Lightpdf
         $result = $this->sendPost($uri, $data, 'PUT');
         
         return !is_null($result);
-            
     }
     
+    /**
+     * 开始任务
+     * @return int
+     * @throws GuzzleHttp\Exception\GuzzleException
+     */
+    public function startTask(): int
+    {
+        $uri = '/tasks/' . $this->task_id . '/process';
+        
+        if ($result = $this->sendPost($uri)) {
+            return $result['api_time'];
+        }
+        
+        return 0;
+    }
     
+    /**
+     * 获取任务详情
+     * @param array $result
+     * @return string
+     * @throws GuzzleHttp\Exception\GuzzleException
+     */
+    public function getTaskInfo(array &$result = []): string
+    {
+        $uri = '/tasks/' . $this->task_id;
+
+        
+        if ($result = $this->sendPost($uri, null, 'GET')) {
+            if ($result['status'] == 2) {
+                $this->target_file_url = $result['target_file']['url'];
+                return $result['target_file']['url'];
+            }
+        }
+        
+        return '';
+    }
     
+    /**
+     * 一直等待任务完成然后返回
+     *
+     * 注意: web 端使用这个方法，可能会因为等待时间太久而导致页面超时。
+     *
+     * @param int $utime
+     * @param array $result
+     * @return string
+     * @throws GuzzleHttp\Exception\GuzzleException
+     */
+    public function infoTask(int $utime = 500, array &$result = []): string
+    {
+        $i = 0;
+        do {
+            $i++ > 0 && usleep($utime);
+            $info = $this->getTaskInfo($result);
+        } while ($result['status'] < 2);
+        
+        return $info;
+    }
     
+    /**
+     * 获取任务结果内容
+     * @param string|null $file_url
+     * @return string
+     * @throws GuzzleHttp\Exception\GuzzleException
+     */
+    public function getTaskBody(string $file_url = null): string
+    {
+        $this->target_file_url = $file_url ?? $this->target_file_url;
+        
+        if (empty($this->target_file_url)) {
+            $this->err_code    = 410;
+            $this->err_message = '文件地址为空';
+            return '';
+        }
+        
+        // 封装请求头
+        $options = [
+            'headers' => [
+                'referer'       => 'https://lightpdf.com/zh/ocr',
+                'authorization' => 'Bearer ' . $this->api_token
+            ]
+        ];
+        
+        // 发起请求
+        try {
+            $response = $this->httpClient->request('GET', $this->target_file_url, $options);
+        } catch (RequestException $e) {
+            $this->err_code    = 401;
+            $this->err_message = $e->getMessage();
+            return '';
+        }
+        
+        return (string) $response->getBody();
+    }
 }
